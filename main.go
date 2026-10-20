@@ -8,13 +8,14 @@ import(
 	"net"
 	"strconv"
 	"bufio"
+	"teng0ni-go-mc/packet_map/status_map"
 )
 
 const (
 	HOST = "one.mods.ovh"
 	PORT = 55081
 	PROTOCOL_V = 777
-	USERNAME = timi.koodaa@gmail.com
+	USERNAME = "TimppaEZ"
 )
 
 func write_varint(writer io.Writer, value uint64) {
@@ -110,6 +111,7 @@ func main() {
 	}
 
 	fmt.Printf("Packet ID: %v\n", packet_ID)
+	fmt.Printf("Packet Name: %s\n", status_map.Map_Clientbound(packet_ID))
 
 	fmt.Printf("Data: %s\n", json_data)
 }
