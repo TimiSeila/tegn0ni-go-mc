@@ -4,14 +4,14 @@ import(
 	"bytes"
 	"encoding/binary"
 	"io"
-	"teng0ni-go-mc/client"
+	"teng0ni-go-mc/packet"
 )
 
 func Encode() {
 
 }
 
-func Decode(packet *client.Packet) (any, error) {
+func Decode(packet *packet.Packet) (any, error) {
 	switch packet.ID {
 	case 0:
 		reader := bytes.NewReader(packet.Data)
