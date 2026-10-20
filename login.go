@@ -14,6 +14,7 @@ import(
 	"crypto/rsa"
 	"crypto/x509"
 	"errors"
+	"teng0ni-go-mc/packet_map/login_map"
 )
 
 const (
@@ -190,6 +191,7 @@ func main() {
 	}
 
 	fmt.Printf("Packet ID: %v\n", packet_ID)
+	fmt.Printf("Packet Name: %v\n", login_map.Map_Clientbound(packet_ID))
 	fmt.Printf("Server ID: %s\n", server_ID)
 	fmt.Printf("Public Key: %x\n", public_key)
 	fmt.Printf("Verify Token: %x\n", verify_token)

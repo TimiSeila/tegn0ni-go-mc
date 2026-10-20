@@ -3,12 +3,13 @@ package main
 import(
 	"bytes"
 	"fmt"
-	"encoding/binary"
 	"io"
 	"net"
 	"strconv"
 	"bufio"
 	"teng0ni-go-mc/packet_map/status_map"
+	"teng0ni-go-mc/client"
+	"teng0ni-go-mc/protocol"
 )
 
 const (
@@ -18,38 +19,24 @@ const (
 	USERNAME = "TimppaEZ"
 )
 
-func write_varint(writer io.Writer, value uint64) {
-	buf := make([]byte, 0)
-	buf = binary.AppendUvarint(buf, value)
-	writer.Write(buf)
-}
-
-func read_varint(reader *bufio.Reader) (uint64, error) {
-	value, err := binary.ReadUvarint(reader)
-
-	if err != nil {
-		return 0, err
-	}
-
-	return value, nil
-}
-
 func write_string(buf *bytes.Buffer, value string) {
-	write_varint(buf, uint64(len(value)))
+	protocol.Write_Varint(bufio.NewWriter(buf), uint64(len(value)))
 	buf.WriteString(value)
 }
 
 func write_packet(conn net.Conn, data []byte) error {
-	packet := new(bytes.Buffer)
-	write_varint(packet, uint64(len(data)))
-	packet.Write(data)
+	length := protocol.ITOVI(uint64(len(data)))
 
-	_, err := conn.Write(packet.Bytes())
+	packet := make([]byte, 0, len(length)+len(data))
+    packet = append(packet, length...)
+    packet = append(packet, data...)
+
+	_, err := conn.Write(packet)
 	return err
 }
 
 func read_packet(reader *bufio.Reader) ([]byte, error) {
-	length, err := read_varint(reader)
+	length, err := protocol.Read_Varint(bufio.NewReader(reader))
 	if err != nil {
 		return nil, err
 	}
@@ -61,46 +48,61 @@ func read_packet(reader *bufio.Reader) ([]byte, error) {
 
 func main() {
 	address := net.JoinHostPort(HOST, strconv.Itoa(PORT))
-	conn, err := net.Dial("tcp", address)
+	client, err := client.New(address)
 
 	if err != nil {
 		fmt.Printf("Error: %v", err)
 	}
 
-	byte_reader := bufio.NewReader(conn)
+	byte_reader := bufio.NewReader(client.Conn)
 
-	defer conn.Close()
+	defer client.Conn.Close()
 
-	handshake_buf := new(bytes.Buffer)
-	write_varint(handshake_buf, 0x0)
-	write_varint(handshake_buf, PROTOCOL_V)
-	write_string(handshake_buf, HOST)
-	binary.Write(handshake_buf, binary.BigEndian, uint16(PORT))
-	write_varint(handshake_buf, 1)
+	handshake_buf := make([]byte, 0) 
+	handshake_buf = append(handshake_buf, protocol.ITOVI(0)...)
+	handshake_buf = append(handshake_buf, protocol.ITOVI(PROTOCOL_V)...)
+	handshake_buf = append(handshake_buf, protocol.Encode_String(HOST)...)
+	port := uint16(PORT)
+	handshake_buf = append(handshake_buf, byte(port>>8), byte(port&0xFF))
+	handshake_buf = append(handshake_buf, protocol.ITOVI(1)...)
 
-	if err := write_packet(conn, handshake_buf.Bytes()); err != nil {
+	if err := write_packet(client.Conn, handshake_buf); err != nil {
 		fmt.Printf("Error: %v", err)
 	}
 
-	status_buf := new(bytes.Buffer)
-	write_varint(status_buf, 0x0)
+	status_buf := make([]byte, 0)
+	status_buf = append(status_buf, protocol.ITOVI(0)...)
 
-	if err := write_packet(conn, status_buf.Bytes()); err != nil {
+	if err := write_packet(client.Conn, status_buf); err != nil {
 		fmt.Printf("Error: %v", err)
 	}
 
-	packet, err := read_packet(byte_reader)
+	packet, err := client.Read_Packet()
 	if err != nil {
 		fmt.Printf("Error: %v", err)
 	}
 
-	packet_reader := bufio.NewReader(bytes.NewReader(packet))
-	packet_ID, err := read_varint(packet_reader)
+	thisdata, err := status_map.Decode(packet)
 	if err != nil {
 		fmt.Printf("Error: %v", err)
 	}
 
-	json_length, err := read_varint(packet_reader)
+	fmt.Printf("Response: %v", thisdata)
+
+	
+
+	packet1, err := read_packet(byte_reader)
+	if err != nil {
+		fmt.Printf("Error: %v", err)
+	}
+
+	packet_reader := bufio.NewReader(bytes.NewReader(packet1))
+	packet_ID, err := protocol.Read_Varint(packet_reader)
+	if err != nil {
+		fmt.Printf("Error: %v", err)
+	}
+
+	json_length, err := protocol.Read_Varint(packet_reader)
 	if err != nil {
 		fmt.Printf("Error: %v", err)
 	}
