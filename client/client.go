@@ -22,7 +22,7 @@ func New(address string) (*Client, error) {
 	return &Client {
 		Connection: &connection.Connection{
 			Conn: conn,
-			State: 1,
+			State: connection.Handshaking,
 		},
 	}, nil
 }

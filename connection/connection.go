@@ -8,9 +8,19 @@ import(
 	"teng0ni-go-mc/protocol"
 )
 
+type State int
+
+const (
+	Handshaking State = iota
+	Status
+	Login
+	Configuration
+	Play
+)
+
 type Connection struct {
 	net.Conn
-	State int
+	State State
 }
 
 func (connection *Connection) Read_Packet(packet *packet.Packet) error {
