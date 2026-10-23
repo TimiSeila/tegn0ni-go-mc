@@ -98,6 +98,25 @@ type MinecraftAuthResponse struct {
 	ExpiresIn int `json:"expires_in"`
 }
 
+// Minecraft profile Res
+type MinecraftProfileResponse struct {
+	Id string `json:"id"`
+	Name string `json:"name"`
+	Skins []struct {
+		Id string `json:"id"`
+		State string `json:"state"`
+		Url string `json:"url"`
+		Variant string `json:"variant"`
+		Alias string `json:"alias"`
+	} `json:"skins"`
+	Capes []struct {
+		Id string `json:"id"`
+		State string `json:"state"`
+		Url string `json:"url"`
+		Alias string `json:"alias"`
+	} `json:"capes"`
+}
+
 const client_id = "6a2c1746-4dc3-4e5a-bbc5-fffa060c3006"
 
 func main(){
