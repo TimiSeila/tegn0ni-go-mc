@@ -6,7 +6,7 @@ import(
 	"io"
 )
 
-func ITOVI(value int) []byte {
+func Encode_Varint(value int) []byte {
     v := int32(value)
     var result []byte
 
@@ -23,13 +23,50 @@ func ITOVI(value int) []byte {
 
 func Encode_String(value string) []byte {
 	string_bytes := []byte(value)
-	string_length := ITOVI(len(string_bytes))
+	string_length := Encode_Varint(len(string_bytes))
 
 	buffer := make([]byte, 0)
 	buffer = append(buffer, string_length...)
 	buffer = append(buffer, string_bytes...)
 
     return buffer
+}
+
+func Read_String(reader io.Reader) (string, error) {
+	string_length, err := Read_Varint(reader)
+	if err != nil {
+		return "", err
+	}
+
+	value := make([]byte, string_length)
+	if _, err := io.ReadFull(reader, value); err != nil {
+		return "", err
+	}
+
+	return string(value), nil
+}
+
+func Read_Boolean(reader io.Reader) (bool, error) {
+	byte := make([]byte, 1)
+	if _, err := io.ReadFull(reader, byte); err != nil {
+		return false, err
+	}
+
+	return byte[0] != 0, nil
+}
+
+func Read_PFArray_Byte(reader io.Reader) ([]byte, error) {
+	length, err := Read_Varint(reader)
+	if err != nil {
+		return nil, err
+	}
+
+	arr := make([]byte, length)
+	if _, err := io.ReadFull(reader, arr); err != nil {
+		return nil, err
+	}
+
+	return arr, nil
 }
 
 func Read_Varint(reader io.Reader) (int, error) {
@@ -39,7 +76,6 @@ func Read_Varint(reader io.Reader) (int, error) {
     for i := 0; i < 5; i++ {
         if _, err := io.ReadFull(reader, buf[:]); err != nil {
 			return 0, fmt.Errorf("reading VarInt byte %d: %w", i+1, err)
-            return 0, err
         }
 
         b := buf[0]

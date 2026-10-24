@@ -1,4 +1,4 @@
-package main
+package msauth
 
 import (
 	"bytes"
@@ -117,60 +117,78 @@ type MinecraftProfileResponse struct {
 	} `json:"capes"`
 }
 
-const client_id = "6a2c1746-4dc3-4e5a-bbc5-fffa060c3006"
+type AuthData struct {
+	AccessToken string
+	Username string
+	UUID string
+}
 
-func main(){
+const client_id = "88650e7e-efee-4857-b9a9-cf580a00ef43"
+
+func Authenticate() (*AuthData, error) {
 	ctx := context.Background()
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
 
 
-	device_code, err := Authorize_Device(ctx, client)
+	device_code, err := authorize_device(ctx, client)
 	if err != nil {
-		fmt.Printf("Error: %v", err)
+		return nil, err
 	}
 
 	var access_token string
 	for {
 		fmt.Println("Authenticating Microsoft user")
-		access_token, err = Authenticate_User(ctx, client, device_code)
+		access_token, err = authenticate_user(ctx, client, device_code)
 		if err == nil && access_token != "" {
 			break
 		}
 
 		select {
 		case <- ctx.Done():
-			return
+			return nil, fmt.Errorf("Unexpected error")
 		case <- time.After(5 * time.Second):
 		}
 	}
 	fmt.Println("Authenticated to Microsoft")
 
 	fmt.Println("Authenticating to Xbox Live")
-	xbl_token, err := Authenticate_Xbox_Live(ctx, client, access_token)
+	xbl_token, err := authenticate_xbox_live(ctx, client, access_token)
 	if err != nil {
-		fmt.Printf("Error: %v", err)
+		return nil, err
 	}
 	fmt.Println("Authenticated to Xbox Live")
 
 	fmt.Println("Otaining XSTS token")
-	xsts_token, hash, err := Obtain_XSTS_Token(ctx, client, xbl_token)
+	xsts_token, hash, err := obtain_xsts_token(ctx, client, xbl_token)
 	if err != nil {
-		fmt.Printf("Error: %v", err)
+		return nil, err
 	}
 	fmt.Println("XSTS token obtained")
 
 	fmt.Println("Authenticating to Minecraft")
-	minecraft_token, err := Authenticate_Minecraft(ctx, client, xsts_token, hash)
+	minecraft_token, err := authenticate_minecraft(ctx, client, xsts_token, hash)
 	if err != nil {
-		fmt.Printf("Error: %v", err)
+		return nil, err
 	}
 	fmt.Println("Authenticated to Minecraft")
-	fmt.Printf("Token: %v\n", minecraft_token)
+
+	fmt.Println("Getting Minecraft profile")
+	minecraft_profile, err := get_minecraft_profile(ctx, client, minecraft_token)
+	if err != nil {
+		return nil, err
+	}
+
+	var auth_data AuthData
+	auth_data.AccessToken = minecraft_token
+	auth_data.Username = minecraft_profile.Name
+	auth_data.UUID = minecraft_profile.Id
+
+	return &auth_data, nil
 }
 
-func Authorize_Device(ctx context.Context, client *http.Client) (string, error) {
+func authorize_device(ctx context.Context, client *http.Client) (string, error) {
 	var payload AuthorizeDeviceRequest
 	payload.ClientId = client_id
 	payload.Scope = "XboxLive.signin"
@@ -211,7 +229,7 @@ func Authorize_Device(ctx context.Context, client *http.Client) (string, error) 
 	return response.DeviceCode, nil
 }
 
-func Authenticate_User(ctx context.Context, client *http.Client, device_code string) (string, error){
+func authenticate_user(ctx context.Context, client *http.Client, device_code string) (string, error){
 	var payload AuthenticateUserRequest
 	payload.GrantType = "urn:ietf:params:oauth:grant-type:device_code"
 	payload.ClientId = client_id
@@ -252,7 +270,7 @@ func Authenticate_User(ctx context.Context, client *http.Client, device_code str
 	return response.AccessToken, nil
 }
 
-func Authenticate_Xbox_Live(ctx context.Context, client *http.Client, access_token string) (string, error) {
+func authenticate_xbox_live(ctx context.Context, client *http.Client, access_token string) (string, error) {
 	var payload XBOXAuthRequest
 	payload.Properties.AuthMethod = "RPS"
 	payload.Properties.SiteName = "user.auth.xboxlive.com"
@@ -296,7 +314,7 @@ func Authenticate_Xbox_Live(ctx context.Context, client *http.Client, access_tok
 	return response.Token, nil
 }
 
-func Obtain_XSTS_Token(ctx context.Context, client *http.Client, xbl_token string) (string, string, error) {
+func obtain_xsts_token(ctx context.Context, client *http.Client, xbl_token string) (string, string, error) {
 	var payload XSTSRequest
 	payload.Properties.SandboxID = "RETAIL"
 	payload.Properties.UserTokens = []string{xbl_token}
@@ -343,7 +361,7 @@ func Obtain_XSTS_Token(ctx context.Context, client *http.Client, xbl_token strin
 	return response.Token, response.DisplayClaims.XUI[0].UHS, nil
 }
 
-func Authenticate_Minecraft(ctx context.Context, client *http.Client, xsts_token string, hash string) (string, error) {
+func authenticate_minecraft(ctx context.Context, client *http.Client, xsts_token string, hash string) (string, error) {
 	var payload MinecraftAuthRequest
 	payload.IdentityToken = "XBL3.0 x=" + hash + ";" + xsts_token
 
@@ -375,10 +393,43 @@ func Authenticate_Minecraft(ctx context.Context, client *http.Client, xsts_token
 		return "", fmt.Errorf("Received status: %v", resp.StatusCode)
 	}
 
-	var response XSTSResponse
+	var response MinecraftAuthResponse
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return "", err 
 	}
 
-	return response.Token, nil
+	return response.AccessToken, nil
+}
+
+func get_minecraft_profile(ctx context.Context, client *http.Client, token string) (*MinecraftProfileResponse, error) {
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		"https://api.minecraftservices.com/minecraft/profile",
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer " + token)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Received status: %v", resp.StatusCode)
+	}
+
+	var response MinecraftProfileResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
 }

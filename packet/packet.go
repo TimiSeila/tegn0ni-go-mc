@@ -28,8 +28,8 @@ func (packet *Packet) Unpack(packet_length int, raw_data []byte) error {
 func (packet *Packet) Pack() ([]byte, error) {
 	raw_data := make([]byte, 0)
 
-	id := protocol.ITOVI(packet.ID)
-	length := protocol.ITOVI(len(id) + len(packet.Data))
+	id := protocol.Encode_Varint(packet.ID)
+	length := protocol.Encode_Varint(len(id) + len(packet.Data))
 
 	raw_data = append(raw_data, length...)
 	raw_data = append(raw_data, id...)
