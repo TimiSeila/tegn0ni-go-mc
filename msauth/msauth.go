@@ -123,7 +123,7 @@ type AuthData struct {
 	UUID string
 }
 
-const client_id = "88650e7e-efee-4857-b9a9-cf580a00ef43"
+const client_id = "6a2c1746-4dc3-4e5a-bbc5-fffa060c3006"
 
 func Authenticate() (*AuthData, error) {
 	ctx := context.Background()
